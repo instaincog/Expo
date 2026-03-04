@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TerminalX Login</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="config.js"></script>
+    <script>
+        document.write(`<style>${COMMON_CSS}</style>`);
+    </script>
+</head>
+<body style="justify-content:center; align-items:center;">
+    <div class="container" style="width:100%; padding:20px;">
+        <div class="card" style="text-align:center; padding: 40px 20px;">
+            <div style="font-size:3rem; color:var(--primary); margin-bottom:10px;"><i class="ph-duotone ph-shield-check"></i></div>
+            <h1 style="margin-bottom:10px;">TerminalX</h1>
+            <p style="color:var(--text-sub); margin-bottom:30px;">Login to access the panel.</p>
+            <button id="loginBtn" class="btn btn-primary">
+                <i class="ph-bold ph-google-logo"></i> Authenticate with Google
+            </button>
+            <div id="errMsg" style="margin-top:20px; color:var(--danger); display:none;"></div>
+        </div>
+    </div>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        
+        firebase.auth().onAuthStateChanged(user => {
+            if(user) {
+                user.getIdToken(true).then(token => {
+                    fetch(`${API_BASE}/api/login`, { 
+                        method:'POST', 
+                        headers:{'Authorization': `Bearer ${token}`} 
+                    })
+                    .then(r=>r.json()).then(d=>{ 
+                        if(d.success) {
+                            localStorage.setItem('isAdmin', d.is_admin);
+                            window.location.href = 'dashboard.html';
+                        }
+                    });
+                });
+            }
+        });
+
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            const p = new firebase.auth.GoogleAuthProvider();
+            firebase.auth().signInWithPopup(p);
+        });
+    </script>
+</body>
+</html>

